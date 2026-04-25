@@ -1,0 +1,2 @@
+﻿AUC_test_uncal,AUC_test_calib,LogLoss_test_calib,Brier_test_calib,ACC_test@0.5_calib,ACC_test@best_thr_calib,best_thr_from_val,ACC_mean_per_match_calib,AUC_mean_per_match_calib,AUC_valid_matches
+0.882645450057413,0.882645450057413,0.3244403748769475,0.1012966531561766,0.8570607246770064,0.8572944567877686,0.525,0.8525089249160723,0.877144432422008,683
