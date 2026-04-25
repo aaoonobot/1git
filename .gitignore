@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Local data and large generated outputs
+data/raw/*.csv
+data/processed/*.csv
+outputs/
+*.pkl
+*.joblib
+
+# Notebook and OS artifacts
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
