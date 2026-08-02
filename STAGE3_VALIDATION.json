@@ -1,0 +1,106 @@
+{
+  "status": "PASS",
+  "syntax_checked_scripts": [
+    "07_xpass_reporting.py",
+    "11_pctv_calibration_diagnostics.py",
+    "12_plot_grouped_permutation_importance.py",
+    "13_team_player_analysis.py",
+    "14_finalize_team_player_tables.py",
+    "15_robustness_analysis.py",
+    "16_robustness_reporting.py",
+    "17_full_sample_analysis.py",
+    "18_three_team_analysis.py",
+    "19_prepare_player_events.py",
+    "20_player_decision_value_analysis.py",
+    "publication_style.py"
+  ],
+  "language_checks": {
+    "chinese_comments_or_output": 0,
+    "review_process_phrases": 0,
+    "local_user_paths": 0
+  },
+  "three_team_manifest": {
+    "rows": 110,
+    "unique_matches": 110,
+    "duplicate_match_ids": 0,
+    "cohort_match_counts": {
+      "AS Monaco 2015/16": 38,
+      "Athletic Club 2015/16": 38,
+      "Bayer Leverkusen 2023/24": 34
+    }
+  },
+  "reference_outputs": {
+    "team_rows": 3,
+    "player_rows": 80,
+    "total_passes_team_table": 54795,
+    "total_passes_player_table": 54795,
+    "eligible_players": 55,
+    "team_player_totals": {
+      "AS Monaco": {
+        "player_rows": 31,
+        "player_pass_total": 15713,
+        "team_pass_total": 15713,
+        "eligible_players": 18,
+        "totals_match": true
+      },
+      "Athletic Club": {
+        "player_rows": 25,
+        "player_pass_total": 16252,
+        "team_pass_total": 16252,
+        "eligible_players": 20,
+        "totals_match": true
+      },
+      "Bayer Leverkusen": {
+        "player_rows": 24,
+        "player_pass_total": 22830,
+        "team_pass_total": 22830,
+        "eligible_players": 17,
+        "totals_match": true
+      }
+    }
+  },
+  "finalization_test": {
+    "status": "PASS",
+    "team_rows": 3,
+    "player_rows": 80,
+    "eligible_players": 55,
+    "matches_existing_final_output": true
+  },
+  "execution_tests": {
+    "14_finalize_team_player_tables.py": {
+      "status": "PASS",
+      "team_rows": 3,
+      "player_rows": 80,
+      "eligible_players": 55,
+      "exact_match_to_existing_final_player_table": true
+    },
+    "12_plot_grouped_permutation_importance.py": {
+      "status": "PASS",
+      "feature_groups": 7,
+      "metrics": 4,
+      "permutations": 30
+    },
+    "16_robustness_reporting.py": {
+      "status": "PASS",
+      "substantive_conclusion": "MIXED",
+      "player_threshold": 200
+    },
+    "20_player_decision_value_analysis.py": {
+      "status": "PASS",
+      "input_rows": 54795,
+      "eligible_players": 55,
+      "stable_role_outfield_players": 49,
+      "qualifying_pairs": 9,
+      "selected_pairs": 3
+    }
+  },
+  "not_executed_without_large_inputs": [
+    "07_xpass_reporting.py",
+    "11_pctv_calibration_diagnostics.py",
+    "13_team_player_analysis.py",
+    "15_robustness_analysis.py",
+    "17_full_sample_analysis.py",
+    "18_three_team_analysis.py",
+    "19_prepare_player_events.py"
+  ]
+}

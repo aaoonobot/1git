@@ -1,14 +1,13 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-07_xpass_reporting.py
+01_xpass_reporting.py
 
-Publication-ready reporting for the locked independent-test xPass evaluation.
+Reporting for the locked independent-test xPass evaluation.
 
 This script does NOT refit or modify any model. It reads the output files
 created by:
 
-    06_xpass.py evaluate ...
+    01_xpass.py evaluate ...
 
 Required files in --evaluation_dir:
     final_test_metrics.csv
@@ -22,7 +21,6 @@ Main outputs:
     Table_1_xpass_independent_test_performance_formatted.csv
     Table_S1_xpass_classification_metrics.csv
     Table_S2_xpass_tail_calibration.csv
-    Figure_1_full_xpass_reliability.png/.pdf/.svg
     Figure_S1_xpass_reliability_comparison.png/.pdf/.svg
     manuscript_results_text.txt
     figure_captions.txt
@@ -65,7 +63,7 @@ class FigureStyle:
     dpi: int = 600
 
     # Typography
-    font_family: str = "Arial"
+    font_family: str = "Times New Roman"
     axis_label_size: float = 9.0
     tick_label_size: float = 8.0
     legend_size: float = 8.0
@@ -87,9 +85,9 @@ class FigureStyle:
     grid_color: str = "#D9D9D9"
 
     # Reliability settings
-    main_reliability_bins: int = 10
-    comparison_reliability_bins: int = 10
-    reliability_binning: str = "quantile"  # "quantile" or "fixed"
+    main_reliability_bins: int = 20
+    comparison_reliability_bins: int = 20
+    reliability_binning: str = "fixed"  # "quantile" or "fixed"
 
     # Tail definitions based on full-model predicted failure risk
     tail_fractions: tuple[float, ...] = (0.05, 0.10, 0.20)
@@ -141,6 +139,19 @@ BOOTSTRAP_METRICS = [
 # COMMAND-LINE INTERFACE
 # =============================================================================
 
+
+def json_default(value: object) -> object:
+    """Convert common NumPy and pandas scalar values for JSON output."""
+    if value is pd.NA:
+        return None
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, (np.integer, np.floating, np.bool_)):
+        return value.item()
+    raise TypeError(
+        f"Object of type {type(value).__name__} is not JSON serializable"
+    )
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -152,7 +163,7 @@ def parse_args() -> argparse.Namespace:
         "--evaluation_dir",
         type=Path,
         required=True,
-        help="Directory created by `06_xpass.py evaluate`.",
+        help="Directory created by `01_xpass.py evaluate`.",
     )
     parser.add_argument(
         "--output_dir",
@@ -194,12 +205,11 @@ def prepare_output_dir(output_dir: Path, overwrite: bool) -> None:
         "Table_1_xpass_independent_test_performance_formatted.csv",
         "Table_S1_xpass_classification_metrics.csv",
         "Table_S2_xpass_tail_calibration.csv",
-        "Figure_1_full_xpass_reliability.png",
-        "Figure_1_full_xpass_reliability.pdf",
-        "Figure_1_full_xpass_reliability.svg",
         "Figure_S1_xpass_reliability_comparison.png",
         "Figure_S1_xpass_reliability_comparison.pdf",
         "Figure_S1_xpass_reliability_comparison.svg",
+        "full_xpass_reliability_data.csv",
+        "Figure_S1_xpass_reliability_comparison_data.csv",
         "manuscript_results_text.txt",
         "figure_captions.txt",
         "reporting_summary.json",
@@ -674,89 +684,6 @@ def clean_axes(ax: plt.Axes, style: FigureStyle) -> None:
     )
 
 
-def plot_full_model_reliability(
-    event_predictions: pd.DataFrame,
-    output_dir: Path,
-    style: FigureStyle,
-) -> pd.DataFrame:
-    y = event_predictions["xpass_success"].to_numpy(dtype=np.int8)
-    p = event_predictions[
-        PREDICTION_COLUMNS["full_calibrated"]
-    ].to_numpy(dtype=float)
-
-    reliability = reliability_from_events(
-        y,
-        p,
-        bins=style.main_reliability_bins,
-        method=style.reliability_binning,
-    )
-
-    figure, ax = plt.subplots(
-        figsize=(style.width_in, style.height_in),
-        constrained_layout=True,
-    )
-
-    ax.plot(
-        [0.0, 1.0],
-        [0.0, 1.0],
-        linestyle=(0, (4, 3)),
-        color=style.ideal_color,
-        linewidth=style.ideal_line_width,
-        label="Ideal calibration",
-        zorder=1,
-    )
-
-    x = reliability["mean_predicted_success"].to_numpy(dtype=float)
-    y_obs = reliability["observed_success_rate"].to_numpy(dtype=float)
-    y_low = reliability["observed_ci_lower"].to_numpy(dtype=float)
-    y_high = reliability["observed_ci_upper"].to_numpy(dtype=float)
-
-    ax.errorbar(
-        x,
-        y_obs,
-        yerr=np.vstack([y_obs - y_low, y_high - y_obs]),
-        fmt="o-",
-        color=style.full_color,
-        linewidth=style.main_line_width,
-        markersize=style.marker_size,
-        markeredgewidth=0.7,
-        markeredgecolor="white",
-        elinewidth=style.error_line_width,
-        capsize=style.cap_size,
-        label="Full xPass",
-        zorder=3,
-    )
-
-    ax.set_xlim(0.0, 1.0)
-    ax.set_ylim(0.0, 1.0)
-    ax.set_xticks(np.linspace(0.0, 1.0, 6))
-    ax.set_yticks(np.linspace(0.0, 1.0, 6))
-    ax.set_xlabel("Predicted pass-completion probability", labelpad=6)
-    ax.set_ylabel("Observed pass-completion rate", labelpad=6)
-
-    clean_axes(ax, style)
-    ax.legend(
-        loc="upper left",
-        frameon=False,
-        handlelength=2.8,
-        borderaxespad=0.4,
-    )
-
-    save_figure_all_formats(
-        figure,
-        output_dir,
-        "Figure_1_full_xpass_reliability",
-        style.dpi,
-    )
-    plt.close(figure)
-
-    reliability.to_csv(
-        output_dir / "Figure_1_full_xpass_reliability_data.csv",
-        index=False,
-        encoding="utf-8-sig",
-    )
-    return reliability
-
 
 def plot_model_comparison_reliability(
     event_predictions: pd.DataFrame,
@@ -903,9 +830,7 @@ def create_figure_captions(style: FigureStyle) -> str:
         if style.reliability_binning == "quantile"
         else "fixed-width"
     )
-    return f"""Figure 1. Reliability of the calibrated full xPass model on the locked independent test set. Predicted pass-completion probabilities were grouped into {style.main_reliability_bins} {binning_text} bins. Points show the mean predicted probability and observed completion rate within each bin; vertical error bars show Wilson 95% confidence intervals for the observed rate. The dashed diagonal denotes ideal calibration.
-
-Supplementary Figure S1. Reliability comparison of the geometry-only, no-team, and full calibrated xPass models on the locked independent test set. Curves were calculated using {style.comparison_reliability_bins} {binning_text} bins. The dashed diagonal denotes ideal calibration. This figure is intended to compare calibration patterns; numerical discrimination and probability-accuracy metrics are reported separately.
+    return f"""Supplementary Figure S1. Reliability of the geometry-only, no-team, and full calibrated xPass models on the locked independent test set. Curves were calculated using {style.comparison_reliability_bins} {binning_text} bins. The dashed diagonal denotes ideal calibration. This figure is intended to compare calibration patterns; numerical discrimination and probability-accuracy metrics are reported separately.
 
 Supplementary Table S2. Tail calibration on test events with the highest failure risk according to the calibrated full xPass model. The same full-model-defined event subsets were used to evaluate all learned models, ensuring that geometry-only, no-team, and full predictions were compared on identical high-risk events.
 """
@@ -1025,10 +950,18 @@ def main() -> None:
         encoding="utf-8-sig",
     )
 
-    full_reliability = plot_full_model_reliability(
-        event_predictions,
-        output_dir,
-        STYLE,
+    full_reliability = reliability_from_events(
+        event_predictions["xpass_success"].to_numpy(dtype=np.int8),
+        event_predictions[
+            PREDICTION_COLUMNS["full_calibrated"]
+        ].to_numpy(dtype=float),
+        bins=STYLE.main_reliability_bins,
+        method=STYLE.reliability_binning,
+    )
+    full_reliability.to_csv(
+        output_dir / "full_xpass_reliability_data.csv",
+        index=False,
+        encoding="utf-8-sig",
     )
     plot_model_comparison_reliability(
         event_predictions,
@@ -1055,7 +988,7 @@ def main() -> None:
     summary = {
         "status": "PASS",
         "purpose": (
-            "Publication-ready reporting for the locked independent-test xPass evaluation."
+            "Reporting for the locked independent-test xPass evaluation."
         ),
         "evaluation_dir": str(evaluation_dir),
         "output_dir": str(output_dir),
@@ -1082,7 +1015,7 @@ def main() -> None:
     }
 
     (output_dir / "reporting_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2),
+        json.dumps(summary, ensure_ascii=False, indent=2, default=json_default),
         encoding="utf-8",
     )
 
@@ -1098,8 +1031,8 @@ def main() -> None:
         f"{output_dir / 'Table_1_xpass_independent_test_performance_formatted.csv'}"
     )
     print(
-        "Main reliability figure: "
-        f"{output_dir / 'Figure_1_full_xpass_reliability.png'}"
+        "Reliability figure: "
+        f"{output_dir / 'Figure_S1_xpass_reliability_comparison.png'}"
     )
 
 
