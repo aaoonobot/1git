@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "full_sample_reference": {
+    "model": "H=3 main OOF xPass, primary open-play sample",
+    "rows": 3396912,
+    "baseline_per_100_passes": -0.9528630592451951,
+    "interval_treatment": "The baseline is treated as a fixed descriptive reference; point estimates and interval bounds are shifted by the same constant."
+  },
+  "player_primary_eligibility": {
+    "minimum_passes": 200,
+    "minimum_matches": 5,
+    "eligible_total": 55,
+    "eligible_by_team": {
+      "AS Monaco": 18,
+      "Athletic Club": 20,
+      "Bayer Leverkusen": 17
+    }
+  },
+  "checks": {
+    "team_rows_equal_3": true,
+    "player_rows_equal_80": true,
+    "eligible_players_equal_55": true,
+    "centered_identity_exact_team": true,
+    "centered_identity_exact_player": true,
+    "ci_width_preserved_team": true,
+    "ci_width_preserved_player": true,
+    "all_eligible_players_ranked": true,
+    "no_ineligible_player_ranked": true
+  },
+  "inputs": {
+    "team_input": "/mnt/data/team_summary(1).csv",
+    "player_input": "/mnt/data/player_summary(1).csv"
+  },
+  "outputs": {
+    "team": "/mnt/data/pipeline_stage3_test/team_summary_final.csv",
+    "player": "/mnt/data/pipeline_stage3_test/player_summary_final.csv",
+    "audit": "/mnt/data/pipeline_stage3_test/finalization_audit.json"
+  }
+}

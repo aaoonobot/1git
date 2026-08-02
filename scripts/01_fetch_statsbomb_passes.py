@@ -21,7 +21,7 @@ import argparse
 import time
 import random
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import pandas as pd
 from statsbombpy import sb
@@ -63,7 +63,38 @@ def parse_args() -> argparse.Namespace:
         "--min_season_year",
         type=int,
         default=2000,
-        help="Retain competition-seasons whose season start year is at least this value.",
+        help="Retain competition-seasons whose season start year is at least this value when no fixed manifest is supplied.",
+    )
+    parser.add_argument(
+        "--competitions_manifest",
+        type=Path,
+        default=None,
+        help=(
+            "Optional fixed competition-season manifest containing competition_id "
+            "and season_id. Use data/manifests/competitions_selected.csv for the "
+            "published sample."
+        ),
+    )
+    parser.add_argument(
+        "--match_manifest",
+        type=Path,
+        default=None,
+        help=(
+            "Optional fixed match manifest containing match_id. When supplied, "
+            "only those matches are downloaded."
+        ),
+    )
+    parser.add_argument(
+        "--expected_matches",
+        type=int,
+        default=None,
+        help="Fail unless the selected match set contains this number of matches.",
+    )
+    parser.add_argument(
+        "--expected_pass_rows",
+        type=int,
+        default=None,
+        help="Fail unless the completed pass-event CSV contains this number of rows.",
     )
     parser.add_argument(
         "--max_matches",
@@ -177,6 +208,64 @@ def collect_competitions(min_season_year: int) -> pd.DataFrame:
     competitions["start_year"] = competitions["start_year"].astype(int)
     competitions = competitions[competitions["start_year"] >= min_season_year].reset_index(drop=True)
     return competitions
+
+
+def load_competition_manifest(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(path)
+    frame = pd.read_csv(path, encoding="utf-8-sig", low_memory=False)
+    required = {"competition_id", "season_id"}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise RuntimeError(
+            "Competition manifest is missing required columns: "
+            + ", ".join(missing)
+        )
+    frame = frame.drop_duplicates(["competition_id", "season_id"]).copy()
+    frame["competition_id"] = pd.to_numeric(
+        frame["competition_id"], errors="raise"
+    ).astype(int)
+    frame["season_id"] = pd.to_numeric(
+        frame["season_id"], errors="raise"
+    ).astype(int)
+    return frame.reset_index(drop=True)
+
+
+def load_match_manifest(path: Path) -> set[int]:
+    if not path.exists():
+        raise FileNotFoundError(path)
+    frame = pd.read_csv(path, encoding="utf-8-sig", low_memory=False)
+    if "match_id" not in frame.columns:
+        raise RuntimeError("Match manifest must contain a match_id column.")
+    match_ids = pd.to_numeric(frame["match_id"], errors="coerce").dropna().astype(int)
+    if match_ids.duplicated().any():
+        raise RuntimeError("Match manifest contains duplicate match_id values.")
+    if match_ids.empty:
+        raise RuntimeError("Match manifest contains no valid match_id values.")
+    return set(match_ids.tolist())
+
+
+def filter_to_match_manifest(
+    matches: pd.DataFrame,
+    required_match_ids: set[int],
+) -> pd.DataFrame:
+    if "match_id" not in matches.columns:
+        raise RuntimeError("Downloaded match metadata does not contain match_id.")
+    normalized = pd.to_numeric(matches["match_id"], errors="coerce")
+    selected = matches.loc[normalized.isin(required_match_ids)].copy()
+    selected["match_id"] = pd.to_numeric(
+        selected["match_id"], errors="raise"
+    ).astype(int)
+    selected = selected.drop_duplicates("match_id").sort_values("match_id")
+    missing = sorted(required_match_ids - set(selected["match_id"].tolist()))
+    if missing:
+        preview = ", ".join(str(value) for value in missing[:20])
+        suffix = " ..." if len(missing) > 20 else ""
+        raise RuntimeError(
+            f"{len(missing)} match IDs from the fixed manifest were not found: "
+            f"{preview}{suffix}"
+        )
+    return selected.reset_index(drop=True)
 
 
 def collect_matches(competitions: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -318,6 +407,13 @@ def split_csv(input_csv: Path, rows_per_file: int) -> None:
         chunk.to_csv(part_path, index=False, encoding="utf-8-sig")
 
 
+def count_csv_rows(path: Path, chunksize: int = 250_000) -> int:
+    total = 0
+    for chunk in pd.read_csv(path, usecols=["match_id"], chunksize=chunksize):
+        total += len(chunk)
+    return total
+
+
 def main() -> None:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -335,11 +431,24 @@ def main() -> None:
     if not output_csv.exists():
         pd.DataFrame(columns=PASS_COLUMNS).to_csv(output_csv, index=False, encoding="utf-8-sig")
 
-    competitions = collect_competitions(args.min_season_year)
+    if args.competitions_manifest is not None:
+        competitions = load_competition_manifest(
+            args.competitions_manifest.expanduser().resolve()
+        )
+        competition_source = "fixed manifest"
+    else:
+        competitions = collect_competitions(args.min_season_year)
+        competition_source = "current StatsBomb catalogue"
     competitions.to_csv(competitions_csv, index=False, encoding="utf-8-sig")
 
     all_matches, competition_log = collect_matches(competitions)
     competition_log.to_csv(competition_log_csv, index=False, encoding="utf-8-sig")
+
+    if args.match_manifest is not None:
+        required_match_ids = load_match_manifest(
+            args.match_manifest.expanduser().resolve()
+        )
+        all_matches = filter_to_match_manifest(all_matches, required_match_ids)
 
     kept_matches, excluded_matches = apply_match_exclusions(
         all_matches,
@@ -354,6 +463,12 @@ def main() -> None:
     if kept_matches.empty:
         raise RuntimeError("No matches remain after filtering. Please check the selection parameters.")
 
+    if args.expected_matches is not None and len(kept_matches) != args.expected_matches:
+        raise RuntimeError(
+            f"Selected match count is {len(kept_matches):,}; "
+            f"expected {args.expected_matches:,}."
+        )
+
     downloaded = existing_match_ids(output_csv) if args.resume else set()
     if args.resume and downloaded:
         kept_matches = kept_matches[~kept_matches["match_id"].astype(int).isin(downloaded)].copy()
@@ -362,6 +477,7 @@ def main() -> None:
         kept_matches = kept_matches.head(args.max_matches).copy()
 
     total_matches = len(kept_matches)
+    print(f"Competition source: {competition_source}")
     print(f"Selected competition-seasons: {len(competitions)}")
     print(f"Selected matches for event download: {total_matches}")
     print(f"Output pass-event CSV: {output_csv}")
@@ -420,6 +536,14 @@ def main() -> None:
 
     download_log = pd.DataFrame(log_rows)
     download_log.to_csv(download_log_csv, index=False, encoding="utf-8-sig")
+
+    if args.expected_pass_rows is not None:
+        observed_rows = count_csv_rows(output_csv)
+        if observed_rows != args.expected_pass_rows:
+            raise RuntimeError(
+                f"Pass-event row count is {observed_rows:,}; "
+                f"expected {args.expected_pass_rows:,}."
+            )
 
     if args.split_rows > 0:
         split_csv(output_csv, args.split_rows)
