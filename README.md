@@ -1,293 +1,303 @@
-# Football Passing Risk-Reward Reproducibility Package
+# Football Passing Risk–Reward Analysis
 
-This repository contains the code used to reproduce the data access, xPass estimation, out-of-fold xPass prediction, and pass-level risk-reward analysis reported in the manuscript.
+This repository provides a reproducible event-data pipeline for separating four components of football passing performance:
 
-The workflow is split into five command-line scripts:
+1. pass-completion probability (`xPass`);
+2. successful-state gain;
+3. failure exposure;
+4. execution relative to model expectation.
 
-1. `scripts/01_fetch_statsbomb_passes.py` downloads StatsBomb Open Data match metadata and pass events.
-2. `scripts/02_train_xpass.py` trains and evaluates the final xPass model.
-3. `scripts/03_generate_oof_xpass.py` generates match-level out-of-fold xPass probabilities for downstream analysis.
-4. `scripts/04_compute_risk_reward.py` computes the risk-reward metrics, including risk, gain on success, failure cost, and expected reward.
-5. `scripts/05_sensitivity_analysis.py` runs structural and formula-level sensitivity analyses.
+The primary analysis contains **3,396,912 open-play passes from 3,926 matches**. Predictive models are split and cross-fitted at match level. The downstream applications include full-sample risk–reward patterns, pressure and pass-height comparisons, three prespecified team-seasons, player-level matched contrasts, and sensitivity analyses.
 
-The scripts do not contain local computer paths. All inputs and outputs are controlled with command-line arguments.
-
-## 1. Data source and access
-
-The raw event data used in the manuscript were derived from publicly available StatsBomb Open Data, subject to the provider's terms of use. Raw data are not included in this repository.
-
-The data-access script downloads the available competition-season catalogue, retrieves match metadata, downloads event data match by match, and keeps pass events with the columns required by the downstream xPass and risk-reward pipeline.
-
-The recommended output file for downstream analysis is:
+## Repository structure
 
 ```text
-data/raw/passes_all_matches_fixed.csv
+.
+├── config/                 # Locked xPass tuning selections
+├── data/
+│   ├── manifests/          # Fixed competition, match-split, and team-season manifests
+│   ├── raw/                # Large raw files are generated locally and not committed
+│   └── processed/          # Large intermediate files are generated locally and not committed
+├── docs/
+│   └── reproducibility.md
+├── reference_outputs/      # Compact audit and summary outputs
+├── scripts/                # Numbered analysis modules
+├── .gitignore
+├── README.md
+└── requirements.txt
 ```
 
-## 2. Environment
+## Data source
 
-A minimal Python environment can be installed with:
+Raw events are obtained from StatsBomb Open Data, subject to the provider's terms of use. Large raw and pass-level intermediate files are not stored in this repository. The fixed manifests in `data/manifests/` identify the competition-seasons, matches, model splits, and three-team application used in the analysis.
+
+## Environment
+
+Create an isolated environment and install the dependencies:
 
 ```bash
+python -m venv .venv
+```
+
+Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-The scripts were written for Python 3.10 or later. The main dependencies are:
+macOS/Linux:
 
-- numpy
-- pandas
-- statsbombpy
-- scikit-learn
-- matplotlib
-- joblib
-- torch, only for the GRU continuation-value component in `04_compute_risk_reward.py`
-
-## 3. Recommended project structure
-
-```text
-football-pass-risk-reward/
-├── README.md
-├── requirements.txt
-├── data/
-│   ├── raw/
-│   │   └── passes_all_matches_fixed.csv
-│   └── processed/
-├── outputs/
-│   ├── xpass_final/
-│   ├── xpass_oof/
-│   └── risk_reward/
-└── scripts/
-    ├── 01_fetch_statsbomb_passes.py
-    ├── 02_train_xpass.py
-    ├── 03_generate_oof_xpass.py
-    ├── 04_compute_risk_reward.py
-    └── 05_sensitivity_analysis.py
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-## 4. Step-by-step reproduction
+The recorded software versions used for the frozen analysis are documented in [`docs/reproducibility.md`](docs/reproducibility.md).
 
-### Step 0. Download and prepare pass-event data
+## Reproduction workflow
 
-This step downloads StatsBomb Open Data match metadata and extracts pass events from match event files. It also saves competition metadata, match metadata, excluded matches, and a download log.
+The commands below use `outputs/` for generated files. That directory is ignored by Git.
+
+### 1. Download the fixed match sample
+
+For exact sample reconstruction, use both committed manifests:
 
 ```bash
 python scripts/01_fetch_statsbomb_passes.py \
   --output_dir data/raw \
   --output_csv passes_all_matches_fixed.csv \
-  --min_season_year 2000
+  --competitions_manifest data/manifests/competitions_selected.csv \
+  --match_manifest data/manifests/xpass_match_split_manifest.csv \
+  --expected_matches 3926 \
+  --expected_pass_rows 3806977
 ```
 
-Main outputs:
+A small smoke test can instead use `--max_matches 20` and omit the expected-count arguments.
 
-```text
-data/raw/passes_all_matches_fixed.csv
-data/raw/statsbomb_competitions_selected.csv
-data/raw/statsbomb_matches_selected.csv
-data/raw/statsbomb_matches_excluded.csv
-data/raw/statsbomb_competition_download_log.csv
-data/raw/statsbomb_event_download_log.csv
-```
-
-For a quick test run, use a small match cap:
+### 2. Prepare the primary and strict open-play samples
 
 ```bash
-python scripts/01_fetch_statsbomb_passes.py \
-  --output_dir data/raw_test \
-  --output_csv passes_sample.csv \
-  --min_season_year 2000 \
-  --max_matches 20
-```
-
-To resume an interrupted download:
-
-```bash
-python scripts/01_fetch_statsbomb_passes.py \
-  --output_dir data/raw \
-  --output_csv passes_all_matches_fixed.csv \
-  --min_season_year 2000 \
-  --resume
-```
-
-If a separate holdout case study is needed, matches involving a specific team, competition, and season can be excluded during the data download step. For example:
-
-```bash
-python scripts/01_fetch_statsbomb_passes.py \
-  --output_dir data/raw \
-  --output_csv passes_all_matches_fixed.csv \
-  --min_season_year 2000 \
-  --exclude_team "Bayer Leverkusen" \
-  --exclude_competition_contains "Bundesliga" \
-  --exclude_season "2023/2024"
-```
-
-The default manuscript workflow does not require this exclusion unless a holdout design is explicitly used and reported.
-
-### Step 1. Train the final xPass model
-
-This step trains the final xPass model, evaluates discrimination and calibration, and saves model files and test-set metrics.
-
-```bash
-python scripts/02_train_xpass.py \
+python scripts/02_prepare_pass_data.py \
   --input_csv data/raw/passes_all_matches_fixed.csv \
-  --output_dir outputs/xpass_final
+  --output_dir outputs/02_preprocessing
 ```
 
-Main outputs:
+Expected output:
 
 ```text
-outputs/xpass_final/xpass_pipeline_auc.pkl
-outputs/xpass_final/xpass_pipeline_calibrated.pkl
-outputs/xpass_final/xpass_test_metrics.csv
-outputs/xpass_final/xpass_test_predictions.csv
-outputs/xpass_final/xpass_val_curve.csv
-outputs/xpass_final/passes_filtered.csv
-outputs/xpass_final/plots/
+outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv
 ```
 
-The file `passes_filtered.csv` contains the open-play pass sample after filtering set-piece and restart contexts.
-
-### Step 2. Generate out-of-fold xPass probabilities
-
-This step produces leakage-controlled xPass probabilities. Matches are held out by fold, and each held-out match receives predictions from a model that was not trained on that match.
+### 3. Audit the xPass target
 
 ```bash
-python scripts/03_generate_oof_xpass.py \
-  --input_csv outputs/xpass_final/passes_filtered.csv \
-  --output_dir outputs/xpass_oof \
-  --n_splits 5 \
-  --epochs 50
+python scripts/03_audit_xpass_target.py \
+  --input_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --competitions_csv data/manifests/competitions_selected.csv \
+  --output_dir outputs/03_target_audit
 ```
 
-Main outputs:
+The committed `data/manifests/xpass_match_split_manifest.csv` is the locked split used in the study. It contains 2,747 training, 395 tuning, 394 calibration, and 390 test matches.
 
-```text
-outputs/xpass_oof/passes_with_xpass_oof.csv
-outputs/xpass_oof/xpass_oof_predictions.csv
-outputs/xpass_oof/xpass_oof_metrics.csv
-outputs/xpass_oof/xpass_oof_fold_metrics.csv
-```
-
-The downstream risk-reward script prioritizes `xpass_pred_calib_oof` when this column is available.
-
-### Step 3. Compute pass-level risk-reward metrics
-
-This step computes the spatial value proxy, conditional continuation value, passer marginal contribution, failure cost, gain on success, risk, and expected reward.
+To regenerate the deterministic split from the target audit:
 
 ```bash
-python scripts/04_compute_risk_reward.py \
-  --input_csv outputs/xpass_oof/passes_with_xpass_oof.csv \
-  --output_dir outputs/risk_reward
+python scripts/04_create_match_splits.py \
+  --match_audit_csv outputs/03_target_audit/match_level_target_audit.csv \
+  --output_dir outputs/04_match_splits
 ```
 
-Main outputs:
-
-```text
-outputs/risk_reward/passes_with_appended_new_cols_v4.csv
-outputs/risk_reward/risk_reward_per_pass_v4.csv
-outputs/risk_reward/cv_predictions_v4.csv
-outputs/risk_reward/passer_marginal_oof_v4.csv
-outputs/risk_reward/frontier_v4.png
-outputs/risk_reward/gru_loss_curve_v4.png
-```
-
-
-### Step 4. Run sensitivity analyses
-
-This step summarizes the robustness of the xPass model and the risk-reward framework under alternative feature, optimizer, continuation-value, passer-marginal, and formula-weight settings. It is computationally heavier than the baseline workflow because it re-runs the relevant scripts across multiple scenarios.
-
-A full run can be launched with:
+### 4. Tune the main and no-team xPass models
 
 ```bash
-python scripts/05_sensitivity_analysis.py \
-  --xpass_input_csv data/raw/passes_all_matches_fixed.csv \
-  --risk_input_csv outputs/xpass_oof/passes_with_xpass_oof.csv \
-  --baseline_risk_csv outputs/risk_reward/passes_with_appended_new_cols_v4.csv \
-  --output_dir outputs/sensitivity
+python scripts/05_tune_xpass.py \
+  --variant main \
+  --input_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --split_manifest data/manifests/xpass_match_split_manifest.csv \
+  --output_dir outputs/05_tune_main
+
+python scripts/05_tune_xpass.py \
+  --variant no-team \
+  --input_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --split_manifest data/manifests/xpass_match_split_manifest.csv \
+  --output_dir outputs/05_tune_no_team
 ```
 
-If only formula-level sensitivity is needed after the baseline risk-reward output has already been generated, use:
+The frozen selections are also provided in `config/`.
+
+### 5. Run the locked independent-test xPass evaluation
 
 ```bash
-python scripts/05_sensitivity_analysis.py \
-  --skip_xpass \
-  --skip_risk_structural \
-  --baseline_risk_csv outputs/risk_reward/passes_with_appended_new_cols_v4.csv \
-  --output_dir outputs/sensitivity_formula_only
+python scripts/06_xpass.py evaluate \
+  --input_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --split_manifest data/manifests/xpass_match_split_manifest.csv \
+  --main_tuning_json config/xpass_main_tuning_selection.json \
+  --no_team_tuning_json config/xpass_no_team_tuning_selection.json \
+  --competitions_csv data/manifests/competitions_selected.csv \
+  --output_dir outputs/06_xpass_evaluation \
+  --bootstrap_reps 1000 \
+  --confirm_test_evaluation
 ```
 
-Main outputs:
+Generate evaluation tables, reliability results, paired model differences, and grouped permutation importance:
+
+```bash
+python scripts/07_xpass_reporting.py \
+  --evaluation_dir outputs/06_xpass_evaluation \
+  --output_dir outputs/07_xpass_reporting
+
+python scripts/08_paired_bootstrap_differences.py \
+  --predictions_csv outputs/06_xpass_evaluation/final_test_event_predictions.csv \
+  --evaluation_record_json outputs/06_xpass_evaluation/final_test_evaluation_record.json \
+  --output_dir outputs/08_paired_bootstrap
+
+python scripts/09_grouped_feature_importance.py \
+  --xpass_script scripts/06_xpass.py \
+  --model_bundle outputs/06_xpass_evaluation/xpass_final_model_bundle.joblib \
+  --input_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --split_manifest data/manifests/xpass_match_split_manifest.csv \
+  --reference_predictions_csv outputs/06_xpass_evaluation/final_test_event_predictions.csv \
+  --output_dir outputs/09_grouped_importance \
+  --repetitions 30 \
+  --permutation_scope within_match
+
+python scripts/12_plot_grouped_permutation_importance.py \
+  --input_csv outputs/09_grouped_importance/grouped_permutation_importance_summary.csv \
+  --output_dir outputs/12_grouped_importance_figure
+```
+
+### 6. Generate match-level out-of-fold xPass predictions
+
+```bash
+python scripts/06_xpass.py crossfit \
+  --input_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --split_manifest data/manifests/xpass_match_split_manifest.csv \
+  --main_tuning_json config/xpass_main_tuning_selection.json \
+  --no_team_tuning_json config/xpass_no_team_tuning_selection.json \
+  --output_dir outputs/06_xpass_oof \
+  --outer_folds 5
+
+python scripts/06_xpass.py verify \
+  --oof_dir outputs/06_xpass_oof
+```
+
+### 7. Build H=1, H=3, and H=5 PCTV pass-value files
+
+```bash
+python scripts/10_threat_value_pctv.py build \
+  --pass_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --oof_csv outputs/06_xpass_oof/oof_xpass_predictions.csv \
+  --output_dir outputs/10_pctv_h1 \
+  --horizon 1 \
+  --output_format csv.gz
+
+python scripts/10_threat_value_pctv.py build \
+  --pass_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --oof_csv outputs/06_xpass_oof/oof_xpass_predictions.csv \
+  --output_dir outputs/10_pctv_h3 \
+  --horizon 3 \
+  --output_format csv.gz
+
+python scripts/10_threat_value_pctv.py build \
+  --pass_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --oof_csv outputs/06_xpass_oof/oof_xpass_predictions.csv \
+  --output_dir outputs/10_pctv_h5 \
+  --horizon 5 \
+  --output_format csv.gz
+```
+
+PCTV calibration diagnostics:
+
+```bash
+python scripts/11_pctv_calibration_diagnostics.py \
+  --h1 outputs/10_pctv_h1/pass_value_oof.csv.gz \
+  --h3 outputs/10_pctv_h3/pass_value_oof.csv.gz \
+  --h5 outputs/10_pctv_h5/pass_value_oof.csv.gz \
+  --output_dir outputs/11_pctv_calibration
+```
+
+### 8. Full-sample and three-team applications
+
+```bash
+python scripts/17_full_sample_analysis.py \
+  --pass_value_csv outputs/10_pctv_h3/pass_value_oof.csv.gz \
+  --pass_metadata_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --output_dir outputs/17_full_sample \
+  --bootstrap_reps 1000
+
+python scripts/18_three_team_analysis.py \
+  --pass_value_csv outputs/10_pctv_h3/pass_value_oof.csv.gz \
+  --pass_metadata_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --cohort_manifest_csv data/manifests/three_team_match_manifest.csv \
+  --output_dir outputs/18_three_team \
+  --bootstrap_reps 1000
+```
+
+### 9. Team and player summaries
+
+```bash
+python scripts/13_team_player_analysis.py \
+  --pass_value outputs/10_pctv_h3/pass_value_oof.csv.gz \
+  --cohort_csv outputs/18_three_team/three_team_event_cohort.csv.gz \
+  --output_dir outputs/13_team_player \
+  --bootstrap_reps 1000
+
+python scripts/14_finalize_team_player_tables.py \
+  --team_input outputs/13_team_player/team_summary.csv \
+  --player_input outputs/13_team_player/player_summary.csv \
+  --output_dir outputs/14_team_player_final
+
+python scripts/19_prepare_player_events.py \
+  --event_cohort outputs/18_three_team/three_team_event_cohort.csv.gz \
+  --metadata_csv outputs/02_preprocessing/passes_preprocessed_with_open_play_flags.csv \
+  --output_dir outputs/19_player_events
+
+python scripts/20_player_decision_value_analysis.py \
+  --player_event_csv outputs/19_player_events/three_team_player_event_data.csv.gz \
+  --player_summary_csv outputs/14_team_player_final/player_summary_final.csv \
+  --output_dir outputs/20_player_analysis
+```
+
+### 10. Sensitivity and robustness analysis
+
+```bash
+python scripts/15_robustness_analysis.py \
+  --h1_pass_value outputs/10_pctv_h1/pass_value_oof.csv.gz \
+  --h3_pass_value outputs/10_pctv_h3/pass_value_oof.csv.gz \
+  --h5_pass_value outputs/10_pctv_h5/pass_value_oof.csv.gz \
+  --cohort_csv outputs/18_three_team/three_team_event_cohort.csv.gz \
+  --output_dir outputs/15_robustness \
+  --player_thresholds 100,200,300
+
+python scripts/16_robustness_reporting.py \
+  --robustness_summary_json outputs/15_robustness/robustness_summary.json \
+  --robustness_stability_csv outputs/15_robustness/robustness_stability.csv \
+  --robustness_player_results_csv outputs/15_robustness/robustness_player_results.csv \
+  --robustness_team_results_csv outputs/15_robustness/robustness_team_results.csv \
+  --selected_player_pairs_csv outputs/20_player_analysis/selected_player_pairs.csv \
+  --output_dir outputs/16_robustness_reporting
+```
+
+## Primary definitions
+
+For pass `i`:
 
 ```text
-outputs/sensitivity/xpass_structural/xpass_sensitivity_summary.csv
-outputs/sensitivity/risk_structural/risk_structural_sensitivity_summary.csv
-outputs/sensitivity/risk_formula/risk_formula_sensitivity_summary.csv
+success value       = T_end − T_start
+failure exposure    = T_start + T_opponent
+expected success    = p_success × success value
+expected failure    = (1 − p_success) × failure exposure
+expected net value  = expected success − expected failure
+execution residual  = observed success − p_success
 ```
 
-The formula-level summary reports the mean and median expected reward, the positive-reward rate, the estimated zero-crossing risk, and the Spearman rank correlation against the baseline expected-reward ranking. These outputs are intended to support the manuscript's robustness checks and supplementary statistical output.
+The risk-bin curves are descriptive. No universal or prescriptive passing-risk threshold is inferred.
 
-## 6. Expected input columns
+## Reference outputs and integrity checks
 
-The downstream scripts expect a StatsBomb-style event table containing pass events or full event data. The following columns are recommended:
+Compact summaries and audit records are included under `reference_outputs/`. Most modules also write JSON audit records, software versions, seeds, input/output hashes, and SHA-256 manifests. See [`docs/reproducibility.md`](docs/reproducibility.md) for expected counts and verification guidance.
 
-- `match_id`
-- `type`
-- `location`
-- `pass_end_location`
-- `pass_outcome`
-- `pass_length`
-- `pass_angle`
-- `minute`
-- `second`
-- `under_pressure`
-- `pass_height`
-- `pass_type`
-- `pass_body_part`
-- `play_pattern`
-- `team`
-- `player`
-- `position`
-- `possession`
+## Citation and license
 
-If `pass_length` and `pass_angle` are absent, they are reconstructed from `location` and `pass_end_location`.
-
-## 7. Main parameter defaults
-
-The default parameters are aligned with the manuscript workflow:
-
-```text
-Minimum season start year: 2000
-xPass random seed: 42
-xPass test size: 0.20
-xPass validation size: 0.25
-xPass epochs: 50
-xPass batch size: 96,000
-xPass learning rate: 2.5e-4
-xPass penalty: elasticnet
-xPass L1 ratio: 0.25
-xPass alpha: 3e-6
-OOF folds: 5
-Continuation-value horizon H: 3
-Continuation discount gamma: 0.95
-GRU window length: 5
-Continuation-value weight lambda: 0.30
-Passer marginal weight: 0.05
-Failure-cost proxy weight on intermediate turnover point: 0.70
-```
-
-## 8. Notes on reproducibility and interpretation
-
-- The data-access script replaces the exploratory notebook workflow. It does not depend on in-memory notebook variables such as `all_matches`, `kept`, or `skipped`.
-- `statsbomb_event_download_log.csv` should be retained as part of the reproducibility record. It documents successful and failed match downloads.
-- The final xPass model and the out-of-fold xPass predictions serve different purposes. The final model is used for model evaluation and future deployment, while the out-of-fold predictions are recommended for constructing residual-based or downstream pass-value metrics.
-- The risk-reward script gives priority to out-of-fold xPass columns when available.
-- The spatial value function in this package is an EPV-like location-based proxy rather than a full transition-matrix xT model. If a manuscript describes the value function as xT, the implementation should be replaced with a transition-based xT estimator or the wording should be revised.
-- All coordinates should be oriented consistently so that the attacking direction is left to right before spatial values are interpreted.
-- The failure-cost component contains a heuristic intermediate turnover-point proxy. Sensitivity analyses are recommended for the coefficients used in this component.
-
-## 9. Code and data availability statement template
-
-Example wording for a manuscript:
-
-```text
-The analysis code used for data acquisition, data cleaning, xPass model estimation, out-of-fold probability generation, risk-reward metric construction, and figure generation is available in this repository. The raw event data were derived from publicly available StatsBomb Open Data, subject to the provider's terms of use. Full statistical outputs, including model performance metrics, out-of-fold prediction metrics, pass-level risk-reward outputs, and sensitivity-analysis summaries, are provided in the repository outputs or supplementary materials.
-```
+Please cite the associated study when using this workflow. No software license has been assigned in this repository unless a `LICENSE` file is added explicitly by the repository owner. The underlying StatsBomb data remain subject to their own terms of use.

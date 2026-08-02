@@ -1,12 +1,5 @@
-# Data
+# Data directory
 
-This folder describes the data workflow used in this repository.
+`data/manifests/` contains the small fixed manifests required to reconstruct the analytical sample. Large raw and processed event files are generated locally and are excluded from version control.
 
-The raw event data are obtained from StatsBomb Open Data. Large raw and processed CSV files are not committed to this repository because of file-size limitations. They can be regenerated using the scripts in the `scripts/` folder.
-
-Suggested workflow:
-
-```bash
-python scripts/01_fetch_statsbomb_passes.py \
-  --output_dir data/raw \
-  --output_csv passes_all_matches_fixed.csv
+Use `scripts/01_fetch_statsbomb_passes.py` with both the competition and match manifests for exact sample reconstruction. The remaining numbered scripts then write intermediate files to a local `outputs/` directory.

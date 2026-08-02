@@ -1,0 +1,47 @@
+{
+  "status": "PASS",
+  "input_csv": "data/processed/passes_preprocessed_with_open_play_flags.csv",
+  "raw_rows_seen": 3806977,
+  "unique_matches": 3926,
+  "primary_open_play": {
+    "rows": 3396912,
+    "successes": 2653016,
+    "failures": 743896,
+    "failure_rate": 0.21899183729222305
+  },
+  "strict_open_play": {
+    "rows": 1754809,
+    "successes": 1434106,
+    "failures": 320703,
+    "failure_rate": 0.18275664189094085
+  },
+  "distinct_primary_outcome_categories": 6,
+  "primary_outcome_categories": {
+    "<SUCCESS_NULL>": 2653016,
+    "Incomplete": 636076,
+    "Out": 73267,
+    "Unknown": 16079,
+    "Pass Offside": 14718,
+    "Injury Clearance": 3756
+  },
+  "gender_mapping_unknown_rows": 0,
+  "target_definition": {
+    "target_name": "xpass_success",
+    "success_value": 1,
+    "failure_value": 0,
+    "success_rule": "pass_outcome is missing or blank",
+    "failure_rule": "pass_outcome contains a non-missing StatsBomb outcome category",
+    "main_analysis_filter": "primary_open_play == True",
+    "strict_sensitivity_filter": "strict_open_play == True",
+    "predictors_explicitly_excluded": [
+      "pass_outcome",
+      "pass_aerial_won",
+      "pass_miscommunication",
+      "pass_recovery",
+      "pass_recipient",
+      "related_events"
+    ],
+    "split_unit": "match_id"
+  },
+  "recommended_next_step": "Create one deterministic match-level split manifest for training, tuning, calibration, and final testing; then fit majority, constant-probability, geometry-only, and full xPass models using the identical split."
+}

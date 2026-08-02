@@ -17,7 +17,7 @@ build
 
 Outputs from ``build``
 -----------------------------
-- pass_value_oof.parquet  (or pass_value_oof.csv.gz if parquet is unavailable)
+- pass_value_oof.csv.gz by default; Parquet can be requested explicitly
 - pass_value_summary.json
 
 The main threat target is pass-based rather than full-event xT: whether the
@@ -96,6 +96,15 @@ def parse_args() -> argparse.Namespace:
     build.add_argument("--alpha", type=float, default=1e-5)
     build.add_argument("--batch_size", type=int, default=200_000)
     build.add_argument("--random_state", type=int, default=42)
+    build.add_argument(
+        "--output_format",
+        choices=("csv.gz", "parquet"),
+        default="csv.gz",
+        help=(
+            "Pass-value output format. CSV.GZ is the default because all "
+            "downstream reporting scripts read it directly."
+        ),
+    )
     build.add_argument("--overwrite", action="store_true")
 
     return parser.parse_args()
@@ -948,21 +957,29 @@ def run_build(args: argparse.Namespace) -> None:
     output = pd.DataFrame(output_data)
 
     output_file: Path
-    output_format: str
-    try:
-        output.to_parquet(parquet_path, index=False)
+    output_format = args.output_format
+    if output_format == "parquet":
+        try:
+            output.to_parquet(parquet_path, index=False)
+        except Exception as exc:
+            raise RuntimeError(
+                "Parquet output was requested but could not be written. "
+                "Install a compatible Parquet engine or use "
+                "--output_format csv.gz."
+            ) from exc
         output_file = parquet_path
-        output_format = "parquet"
-    except Exception as exc:
-        print(f"[warning] Parquet unavailable; using gzip CSV. reason={exc}")
+    else:
         output.to_csv(
             csv_path,
             index=False,
             encoding="utf-8-sig",
-            compression="gzip",
+            compression={
+                "method": "gzip",
+                "compresslevel": 6,
+                "mtime": 0,
+            },
         )
         output_file = csv_path
-        output_format = "csv.gz"
 
     global_metrics = {
         "rows": int(len(output)),

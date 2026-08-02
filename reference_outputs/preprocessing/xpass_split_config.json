@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "seed": 20260723,
+  "proportions": {
+    "training": 0.7,
+    "tuning": 0.1,
+    "calibration": 0.1,
+    "test": 0.1
+  },
+  "time_bands": 8,
+  "stratification": "competition_gender crossed with match-date quantile band",
+  "assignment": "stable SHA-256 ordering within each stratum followed by largest-remainder count allocation",
+  "split_unit": "match_id",
+  "focal_match_ids_csv": null,
+  "focal_holdout_matches": 0,
+  "test_set_policy": "The test split must remain untouched until all model, feature, and calibration decisions are locked."
+}

@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "input_csv": "data/raw/passes_all_matches_fixed.csv",
+  "input_sha256": "32587dc86c67f64e9cd6f3883f3a7713d1c5b0aa4f1e09cef239fce6708ae7f9",
+  "output_csv": "data/processed/passes_preprocessed_with_open_play_flags.csv",
+  "output_sha256": "d4e9ed69b42ca1ea0e600a2ea467412a48c54e06c6d47ffce45f8be0e9ff7495",
+  "raw_pass_rows": 3806977,
+  "unique_matches": 3926,
+  "primary_open_play_rows": 3396912,
+  "primary_excluded_restart_rows": 410065,
+  "strict_open_play_rows": 1754809,
+  "strict_excluded_restart_or_restart_sequence_rows": 2052168,
+  "malformed_start_coordinates": 0,
+  "malformed_end_coordinates": 0,
+  "start_coordinate_fields_clipped": 93,
+  "end_coordinate_fields_clipped": 1171,
+  "total_coordinate_fields_clipped": 1264,
+  "main_analysis_filter": "primary_open_play == True",
+  "sensitivity_filter": "strict_open_play == True"
+}
