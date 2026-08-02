@@ -1,2 +1,0 @@
-team,n_passes,success_rate,xpass_mean,risk_mean,gain_mean,cost_mean,value_mean,delta_risk_mean,delta_gain_mean,delta_cost_mean,delta_value_mean,delta_value_median,
-Bayer Leverkusen,14820,0.894331984,0.908950173,0.091049827,0.057955527,0.238743191,0.032690661,-0.001599742,0.000151512,-0.018499955,0.001885111,-0.001811338,
