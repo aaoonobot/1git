@@ -1,0 +1,206 @@
+{
+  "status": "PASS",
+  "model_variant": "no_team_identity",
+  "excluded_identity_features": [
+    "team",
+    "possession_team"
+  ],
+  "input_csv": "data/processed/passes_preprocessed_with_open_play_flags.csv",
+  "split_manifest": "data/manifests/xpass_match_split_manifest.csv",
+  "seed": 20260723,
+  "grid": [
+    {
+      "alpha": 1e-05,
+      "l1_ratio": 0.0
+    },
+    {
+      "alpha": 1e-05,
+      "l1_ratio": 0.15
+    },
+    {
+      "alpha": 1e-05,
+      "l1_ratio": 0.3
+    },
+    {
+      "alpha": 3e-05,
+      "l1_ratio": 0.0
+    },
+    {
+      "alpha": 3e-05,
+      "l1_ratio": 0.15
+    },
+    {
+      "alpha": 3e-05,
+      "l1_ratio": 0.3
+    },
+    {
+      "alpha": 0.0001,
+      "l1_ratio": 0.0
+    },
+    {
+      "alpha": 0.0001,
+      "l1_ratio": 0.15
+    },
+    {
+      "alpha": 0.0001,
+      "l1_ratio": 0.3
+    }
+  ],
+  "max_epochs": 5,
+  "geometry_best": {
+    "candidate_name": "geometry_a3e-05_l10.3",
+    "epoch": 2,
+    "config": {
+      "alpha": 3e-05,
+      "l1_ratio": 0.3
+    },
+    "metrics": {
+      "rows": 341230,
+      "success_prevalence": 0.7788412507692759,
+      "failure_prevalence": 0.22115874923072415,
+      "roc_auc_success": 0.8037193463395578,
+      "pr_auc_failure": 0.5678138132200531,
+      "log_loss": 0.4185222965549781,
+      "brier_score": 0.1325468030940704,
+      "accuracy": 0.8162236614600124,
+      "balanced_accuracy": 0.6306657949570182,
+      "failure_precision": 0.6980007450639514,
+      "failure_recall": 0.2979354941298068,
+      "failure_f1": 0.4176154831999108
+    }
+  },
+  "full_best": {
+    "candidate_name": "full_a3e-05_l10.3",
+    "epoch": 3,
+    "config": {
+      "alpha": 3e-05,
+      "l1_ratio": 0.3
+    },
+    "metrics": {
+      "rows": 341230,
+      "success_prevalence": 0.7788412507692759,
+      "failure_prevalence": 0.22115874923072415,
+      "roc_auc_success": 0.8711743578298551,
+      "pr_auc_failure": 0.6450625554659735,
+      "log_loss": 0.35893121379297777,
+      "brier_score": 0.11376553311486512,
+      "accuracy": 0.837531869999707,
+      "balanced_accuracy": 0.7218738265903643,
+      "failure_precision": 0.6737700650759219,
+      "failure_recall": 0.5144833434924336,
+      "failure_f1": 0.5834504211404227
+    }
+  },
+  "category_map": {
+    "pass_height": [
+      "Ground Pass",
+      "High Pass",
+      "Low Pass"
+    ],
+    "pass_body_part": [
+      "<MISSING>",
+      "Drop Kick",
+      "Head",
+      "Keeper Arm",
+      "Left Foot",
+      "No Touch",
+      "Other",
+      "Right Foot"
+    ],
+    "pass_type": [
+      "<MISSING>",
+      "Interception",
+      "Recovery"
+    ],
+    "play_pattern": [
+      "From Corner",
+      "From Counter",
+      "From Free Kick",
+      "From Goal Kick",
+      "From Keeper",
+      "From Kick Off",
+      "From Throw In",
+      "Other",
+      "Regular Play"
+    ],
+    "position": [
+      "Center Attacking Midfield",
+      "Center Back",
+      "Center Defensive Midfield",
+      "Center Forward",
+      "Center Midfield",
+      "Goalkeeper",
+      "Left Attacking Midfield",
+      "Left Back",
+      "Left Center Back",
+      "Left Center Forward",
+      "Left Center Midfield",
+      "Left Defensive Midfield",
+      "Left Midfield",
+      "Left Wing",
+      "Left Wing Back",
+      "Right Attacking Midfield",
+      "Right Back",
+      "Right Center Back",
+      "Right Center Forward",
+      "Right Center Midfield",
+      "Right Defensive Midfield",
+      "Right Midfield",
+      "Right Wing",
+      "Right Wing Back",
+      "Secondary Striker"
+    ],
+    "pass_technique": [
+      "<MISSING>",
+      "Straight",
+      "Through Ball"
+    ]
+  },
+  "categorical_features": [
+    "pass_height",
+    "pass_body_part",
+    "pass_type",
+    "play_pattern",
+    "position",
+    "pass_technique"
+  ],
+  "geometry_numeric_features": [
+    "start_x_norm",
+    "start_y_norm",
+    "end_x_norm",
+    "end_y_norm",
+    "delta_x_norm",
+    "delta_y_norm",
+    "pass_length_norm",
+    "sin_angle",
+    "cos_angle",
+    "start_goal_distance_norm",
+    "end_goal_distance_norm"
+  ],
+  "full_numeric_features": [
+    "start_x_norm",
+    "start_y_norm",
+    "end_x_norm",
+    "end_y_norm",
+    "delta_x_norm",
+    "delta_y_norm",
+    "pass_length_norm",
+    "sin_angle",
+    "cos_angle",
+    "start_goal_distance_norm",
+    "end_goal_distance_norm",
+    "minute_norm",
+    "second_norm",
+    "under_pressure_num",
+    "pass_cross_num",
+    "pass_switch_num",
+    "pass_through_ball_num",
+    "pass_backheel_num",
+    "pass_outswinging_num",
+    "pass_inswinging_num",
+    "pass_straight_num",
+    "pass_cut_back_num"
+  ],
+  "selection_metric": "lowest tuning log loss; ties resolved by Brier score and then failure-class PR-AUC",
+  "test_set_read": false
+}
